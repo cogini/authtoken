@@ -1,4 +1,6 @@
 defmodule ConnCase do
+  @moduledoc false
+
   use ExUnit.CaseTemplate
 
   using do
@@ -8,7 +10,7 @@ defmodule ConnCase do
     end
   end
 
-  setup tags do
+  setup _tags do
     {:ok, conn: Phoenix.ConnTest.build_conn()}
   end
 end
