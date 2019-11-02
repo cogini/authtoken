@@ -4,7 +4,7 @@ defmodule AuthTokenTest do
   @user %{id: 123}
 
   setup do
-    Application.put_env(:authtoken, :timeout, 86400)
+    Application.put_env(:authtoken, :timeout, 86_400)
     Application.put_env(:authtoken, :refresh, 1800)
   end
 
