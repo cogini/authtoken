@@ -17,7 +17,7 @@ defmodule AuthToken do
   """
 
   @doc """
-  Generate a random key for AES128
+  Generate random key for AES128.
 
   ## Examples
 
@@ -30,26 +30,39 @@ defmodule AuthToken do
   end
 
   @doc """
-  Generates an encrypted auth token.
+  Generate encrypted auth token.
 
-  Contains an encoded version of the provided map, plus a timestamp for timeout and refresh.
+  The token includes the keys from the provided map, plus timeout (`ct`) and
+  refresh (`rt`).
+
+  Reads encryption key from config `token_key`, defaulting to application environment.
   """
-  @spec generate_token(map) :: {:ok, String.t}
-  def generate_token(user_data) do
+  @spec generate_token(map, map) :: {:ok, String.t}
+  def generate_token(user_data, config \\ %{}) do
     base_data = %{
       "ct" => DateTime.to_unix(DateTime.utc_now()),
       "rt" => DateTime.to_unix(DateTime.utc_now())}
 
     token_content = user_data |> Enum.into(base_data)
 
-    jwt = JOSE.JWT.encrypt(get_jwk(), get_jwe(), token_content) |> JOSE.JWE.compact |> elem(1)
+    jwt = JOSE.JWT.encrypt(get_jwk(config), get_jwe(), token_content) |> JOSE.JWE.compact |> elem(1)
 
     # Remove JWT header
     {:ok, Regex.run(~r/.+?\.(.+)/, jwt) |> List.last}
   end
 
   @doc """
-  Checks a token and refreshes if necessary.
+  Refresh token if necessary.
+
+  Returns `{:error, :timedout}` if the token has expired.
+  Make the user log in again.
+
+  Returns `{:error, :stillfresh}` if the token refresh time has not yet been
+  reached. Do nothing.
+
+  Returns `{:ok, token}` with a new token if the token needed to be refreshed.
+  The new token has an updated refresh time (`rt`), but keeps the same creation
+  time/expiration. Check that the user is still valid and send them the new token.
 
   ## Examples
 
@@ -62,69 +75,84 @@ defmodule AuthToken do
           # Check credentials and send back new token
       end
   """
-  @spec refresh_token(map) :: {:ok, String.t} | {:error, :stillfresh} | {:error, :timedout}
-  def refresh_token(token) when is_map(token) do
+  @spec refresh_token(binary | map, map) :: {:ok, String.t} | {:error, :stillfresh} | {:error, :timedout}
+  def refresh_token(token, config \\ %{})
+  def refresh_token(token, config) when is_map(token) do
     cond do
-      is_timedout?(token) ->    {:error, :timedout}
-      !needs_refresh?(token) -> {:error, :stillfresh}
+      is_timedout?(token, config) ->    {:error, :timedout}
+      !needs_refresh?(token, config) -> {:error, :stillfresh}
 
-      needs_refresh?(token) ->
+      needs_refresh?(token, config) ->
         token = %{"rt" => DateTime.to_unix(DateTime.utc_now())} |> Enum.into(token)
 
-        generate_token(token)
+        generate_token(token, config)
     end
   end
-
-  @spec refresh_token(String.t) :: {:ok, String.t} | {:error, :stillfresh} | {:error, :timedout}
-  def refresh_token(token) when is_binary(token) do
-    {:ok, token} = decrypt_token(token)
-
-    token
-    |> refresh_token
+  def refresh_token(bin, config) when is_binary(bin) do
+    {:ok, token} = decrypt_token(bin, config)
+    refresh_token(token, config)
   end
 
   @doc """
-  Check if token is timedout and not valid anymore
+  Check if token has timed out.
+
+  Reads `timeout` from config, defaulting to application environment.
+
+  If the time since the token creation time (`ct`) exceeds timeout, returns
+  true.
   """
-  @spec is_timedout?(map) :: boolean
-  def is_timedout?(token) do
+  @spec is_timedout?(map, map) :: boolean
+  def is_timedout?(token, config \\ %{})
+  def is_timedout?(token, config) when is_map(token) do
     {:ok, ct} = DateTime.from_unix(token["ct"])
 
-    DateTime.diff(DateTime.utc_now(), ct) > get_config(:timeout)
+    duration = config[:timeout] || get_config(:timeout)
+    DateTime.diff(DateTime.utc_now(), ct) > duration
   end
 
   @doc """
-  Check if token is stale and needs to be refreshed
+  Check if token is stale and needs to be refreshed.
+
+  Reads `refresh` from config, defaulting to application environment.
+
+  If the time since the token refresh time (`rt`) exceeds refresh, returns
+  true.
+
   """
-  @spec needs_refresh?(map) :: boolean
-  def needs_refresh?(token) do
+  @spec needs_refresh?(map, map) :: boolean
+  def needs_refresh?(token, config \\ %{}) do
     {:ok, rt} = DateTime.from_unix(token["rt"])
 
-    DateTime.diff(DateTime.utc_now(), rt) > get_config(:refresh)
+    duration = config[:refresh] || get_config(:refresh)
+    DateTime.diff(DateTime.utc_now(), rt) > duration
   end
 
   @doc """
-  Decrypt an authentication token
+  Decrypt authentication token and return content.
 
-  Format "bearer: tokengoeshere" and "bearer tokengoeshere" will be accepted and parsed out.
+  Accepts a token as input, or you can pass it a `t:Plug.Conn.t/0` and it will
+  pull the token from the `authorization` header. It will remove a `bearer`
+  prefix, e.g. `bearer: thetoken` or `bearer thetoken`.
+
+  Reads encryption key from config `token_key`, defaulting to application environment.
   """
-  @spec decrypt_token(Plug.Conn.t) :: {:ok, String.t} | {:error}
-  def decrypt_token(%Plug.Conn{} = conn) do
+  @spec decrypt_token(Plug.Conn.t | String.t, map) :: {:ok, map} | {:error}
+  def decrypt_token(conn_or_token, config \\ %{})
+  def decrypt_token(%Plug.Conn{} = conn, config) do
     token_header = Plug.Conn.get_req_header(conn, "authorization") |> List.first
 
     crypto_token = if token_header, do: Regex.run(~r/(bearer\:? )?(.+)/, token_header) |> List.last
 
-    decrypt_token(crypto_token)
+    decrypt_token(crypto_token, config)
   end
 
-  @spec decrypt_token(String.t) :: {:ok, String.t} | {:error}
-  def decrypt_token(headless_token) when is_binary(headless_token) do
+  def decrypt_token(headless_token, config) when is_binary(headless_token) do
     header = get_jwe() |> OJSON.encode! |> :base64url.encode
 
     auth_token = header <> "." <> headless_token
 
     try do
-      %{fields: token} = JOSE.JWT.decrypt(get_jwk(), auth_token) |> elem(1)
+      %{fields: token} = JOSE.JWT.decrypt(get_jwk(config), auth_token) |> elem(1)
 
       {:ok, token}
     rescue
@@ -132,28 +160,28 @@ defmodule AuthToken do
     end
   end
 
-  @spec decrypt_token(nil) :: {:error}
-  def decrypt_token(_) do
+  def decrypt_token(_, _) do
     {:error}
   end
 
-  @spec get_jwe() :: %{alg: String.t, enc: String.t, typ: String.t}
+  # Get jwe params
+  @spec get_jwe() :: map
   defp get_jwe do
-    %{ "alg" => "dir", "enc" => "A128GCM", "typ" => "JWT" }
+    %{"alg" => "dir", "enc" => "A128GCM", "typ" => "JWT"}
   end
 
-  @spec get_jwk() :: %JOSE.JWK{}
-  defp get_jwk do
-    get_config(:token_key)
-    |> JOSE.JWK.from_oct()
+  # Get JWK params from config or environment
+  @spec get_jwk(map) :: %JOSE.JWK{}
+  defp get_jwk(config) do
+    key = config[:token_key] || get_config(:token_key)
+    JOSE.JWK.from_oct(key)
   end
 
-  @spec get_config(atom) :: %{}
-  def get_config(atom) do
-    content = Application.get_env(:authtoken, atom)
-
-    unless content, do: raise "No AuthToken configuration set for " <> atom
-
+  # Get map
+  @spec get_config(atom) :: map
+  def get_config(key) do
+    content = Application.get_env(:authtoken, key)
+    content || raise "Missing AuthToken config for #{key}"
     content
   end
 end
