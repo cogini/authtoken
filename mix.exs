@@ -25,6 +25,8 @@ defmodule AuthToken.Mixfile do
       deps: deps(),
       docs: docs(),
       package: package(),
+      test_coverage: [tool: ExCoveralls],
+      preferred_cli_env: [coveralls: :test, "coveralls.detail": :test, "coveralls.post": :test, "coveralls.html": :test],
     ]
   end
 
@@ -48,8 +50,10 @@ defmodule AuthToken.Mixfile do
       {:phoenix, "~> 1.4"},
 
       {:poison, "~> 1.0", only: :test},
+      # {:credo, "~> 1.1", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 0.5", only: [:dev, :test], runtime: false},
-      {:ex_doc, "~> 0.21", only: :dev}
+      {:ex_doc, "~> 0.21", only: :dev},
+      # {:excoveralls, "~> 0.12.0", only: [:dev, :test], runtime: false},
     ]
   end
 
