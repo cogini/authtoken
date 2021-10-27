@@ -24,7 +24,7 @@ defmodule AuthToken do
       iex> AuthToken.generate_key()
       {:ok, <<153, 67, 252, 211, 199, 186, 212, 114, 109, 99, 222, 205, 31, 26, 100, 253>>}
   """
-  @spec generate_key() :: {:ok, binary}
+  @spec generate_key() :: {:ok, binary()}
   def generate_key do
     {:ok, :crypto.strong_rand_bytes(16)}
   end
@@ -37,18 +37,20 @@ defmodule AuthToken do
 
   Reads encryption key from config `token_key`, defaulting to application environment.
   """
-  @spec generate_token(map, map) :: {:ok, String.t}
+  @spec generate_token(map(), map()) :: {:ok, String.t()}
   def generate_token(user_data, config \\ %{}) do
     base_data = %{
       "ct" => DateTime.to_unix(DateTime.utc_now()),
-      "rt" => DateTime.to_unix(DateTime.utc_now())}
+      "rt" => DateTime.to_unix(DateTime.utc_now())
+    }
 
     token_content = user_data |> Enum.into(base_data)
 
-    jwt = JOSE.JWT.encrypt(get_jwk(config), get_jwe(), token_content) |> JOSE.JWE.compact |> elem(1)
+    jwt =
+      JOSE.JWT.encrypt(get_jwk(config), get_jwe(), token_content) |> JOSE.JWE.compact() |> elem(1)
 
     # Remove JWT header
-    {:ok, Regex.run(~r/.+?\.(.+)/, jwt) |> List.last}
+    {:ok, Regex.run(~r/.+?\.(.+)/, jwt) |> List.last()}
   end
 
   @doc """
@@ -75,12 +77,17 @@ defmodule AuthToken do
           # Check credentials and send back new token
       end
   """
-  @spec refresh_token(binary | map, map) :: {:ok, String.t} | {:error, :stillfresh} | {:error, :timedout}
+  @spec refresh_token(binary | map, map) ::
+          {:ok, String.t()} | {:error, :stillfresh} | {:error, :timedout}
   def refresh_token(token, config \\ %{})
+
   def refresh_token(token, config) when is_map(token) do
     cond do
-      is_timedout?(token, config) ->    {:error, :timedout}
-      !needs_refresh?(token, config) -> {:error, :stillfresh}
+      is_timedout?(token, config) ->
+        {:error, :timedout}
+
+      !needs_refresh?(token, config) ->
+        {:error, :stillfresh}
 
       needs_refresh?(token, config) ->
         token = %{"rt" => DateTime.to_unix(DateTime.utc_now())} |> Enum.into(token)
@@ -88,6 +95,7 @@ defmodule AuthToken do
         generate_token(token, config)
     end
   end
+
   def refresh_token(bin, config) when is_binary(bin) do
     {:ok, token} = decrypt_token(bin, config)
     refresh_token(token, config)
@@ -103,6 +111,7 @@ defmodule AuthToken do
   """
   @spec is_timedout?(map, map) :: boolean
   def is_timedout?(token, config \\ %{})
+
   def is_timedout?(token, config) when is_map(token) do
     {:ok, ct} = DateTime.from_unix(token["ct"])
 
@@ -136,18 +145,20 @@ defmodule AuthToken do
 
   Reads encryption key from config `token_key`, defaulting to application environment.
   """
-  @spec decrypt_token(Plug.Conn.t | String.t, map) :: {:ok, map} | {:error}
+  @spec decrypt_token(Plug.Conn.t() | String.t(), map) :: {:ok, map} | {:error}
   def decrypt_token(conn_or_token, config \\ %{})
-  def decrypt_token(%Plug.Conn{} = conn, config) do
-    token_header = Plug.Conn.get_req_header(conn, "authorization") |> List.first
 
-    crypto_token = if token_header, do: Regex.run(~r/(bearer\:? )?(.+)/, token_header) |> List.last
+  def decrypt_token(%Plug.Conn{} = conn, config) do
+    token_header = Plug.Conn.get_req_header(conn, "authorization") |> List.first()
+
+    crypto_token =
+      if token_header, do: Regex.run(~r/(bearer\:? )?(.+)/, token_header) |> List.last()
 
     decrypt_token(crypto_token, config)
   end
 
   def decrypt_token(headless_token, config) when is_binary(headless_token) do
-    header = get_jwe() |> OJSON.encode! |> :base64url.encode
+    header = get_jwe() |> OJSON.encode!() |> Base.url_encode64()
 
     auth_token = header <> "." <> headless_token
 
