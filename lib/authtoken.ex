@@ -145,7 +145,7 @@ defmodule AuthToken do
 
   Reads encryption key from config `token_key`, defaulting to application environment.
   """
-  @spec decrypt_token(Plug.Conn.t() | String.t(), map) :: {:ok, map} | {:error}
+  @spec decrypt_token(Plug.Conn.t() | String.t(), map()) :: {:ok, map()} | {:error}
   def decrypt_token(conn_or_token, config \\ %{})
 
   def decrypt_token(%Plug.Conn{} = conn, config) do
@@ -176,7 +176,7 @@ defmodule AuthToken do
   end
 
   # Get jwe params
-  @spec get_jwe() :: map
+  @spec get_jwe() :: map()
   defp get_jwe do
     %{"alg" => "dir", "enc" => "A128GCM", "typ" => "JWT"}
   end
@@ -189,7 +189,7 @@ defmodule AuthToken do
   end
 
   # Get map
-  @spec get_config(atom) :: map
+  @spec get_config(atom()) :: map()
   def get_config(key) do
     content = Application.get_env(:authtoken, key)
     content || raise "Missing AuthToken config for #{key}"
