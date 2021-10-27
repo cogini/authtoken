@@ -43,7 +43,7 @@ defmodule AuthTokenTest do
       :timer.sleep(1000)
 
       Application.put_env(:authtoken, :refresh, -1)
-      assert {:ok, fresh_token} = AuthToken.refresh_token(token)
+      assert {:ok, _fresh_token} = AuthToken.refresh_token(token)
       assert {:ok, fresh_token} = AuthToken.refresh_token(encrypted_token)
 
       {:ok, token} = AuthToken.decrypt_token(fresh_token)
