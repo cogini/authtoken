@@ -158,7 +158,7 @@ defmodule AuthToken do
   end
 
   def decrypt_token(headless_token, config) when is_binary(headless_token) do
-    header = get_jwe() |> OJSON.encode!() |> Base.url_encode64()
+    header = get_jwe() |> OJSON.encode!() |> Base.url_encode64(padding: false)
 
     auth_token = header <> "." <> headless_token
 
