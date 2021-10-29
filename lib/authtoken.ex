@@ -77,8 +77,10 @@ defmodule AuthToken do
           # Check credentials and send back new token
       end
   """
-  @spec refresh_token(binary | map, map) ::
-          {:ok, String.t()} | {:error, :stillfresh} | {:error, :timedout}
+  @spec refresh_token(binary() | map(), map()) ::
+          {:ok, String.t()}
+          | {:error, :stillfresh}
+          | {:error, :timedout}
   def refresh_token(token, config \\ %{})
 
   def refresh_token(token, config) when is_map(token) do
@@ -109,7 +111,7 @@ defmodule AuthToken do
   If the time since the token creation time (`ct`) exceeds timeout, returns
   true.
   """
-  @spec is_timedout?(map, map) :: boolean
+  @spec is_timedout?(map(), map()) :: boolean()
   def is_timedout?(token, config \\ %{})
 
   def is_timedout?(token, config) when is_map(token) do
@@ -128,7 +130,7 @@ defmodule AuthToken do
   true.
 
   """
-  @spec needs_refresh?(map, map) :: boolean
+  @spec needs_refresh?(map(), map()) :: boolean()
   def needs_refresh?(token, config \\ %{}) do
     {:ok, rt} = DateTime.from_unix(token["rt"])
 
@@ -182,7 +184,7 @@ defmodule AuthToken do
   end
 
   # Get JWK params from config or environment
-  @spec get_jwk(map) :: %JOSE.JWK{}
+  @spec get_jwk(map()) :: %JOSE.JWK{}
   defp get_jwk(config) do
     key = config[:token_key] || get_config(:token_key)
     JOSE.JWK.from_oct(key)
