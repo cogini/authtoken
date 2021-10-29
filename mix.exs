@@ -31,15 +31,17 @@ defmodule AuthToken.Mixfile do
   end
 
   def application do
-    [applications: [:logger, :plug, :jose, :ojson] ++ applications(Mix.env),
-    env: [
-      timeout: 86400,
-      refresh: 1800
-    ]]
+    [
+      extra_applications: [:logger] ++ extra_applications(Mix.env),
+      env: [
+        timeout: 86400,
+        refresh: 1800
+      ]
+    ]
   end
 
-  def applications(env) when env in [:dev, :test], do: [:phoenix]
-  def applications(_), do: []
+  def extra_applications(env) when env in [:dev, :test], do: [:phoenix]
+  def extra_applications(_), do: []
 
   defp elixirc_paths(:test), do: ["lib", "test/support"]
   defp elixirc_paths(_),     do: ["lib"]
