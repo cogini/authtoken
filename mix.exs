@@ -31,12 +31,15 @@ defmodule AuthToken.Mixfile do
   end
 
   def application do
-    [applications: [:logger, :plug],
+    [applications: [:logger, :plug, :jose, :ojson] ++ applications(Mix.env),
     env: [
       timeout: 86400,
       refresh: 1800
     ]]
   end
+
+  def applications(env) when env in [:dev, :test], do: [:phoenix]
+  def applications(_), do: []
 
   defp elixirc_paths(:test), do: ["lib", "test/support"]
   defp elixirc_paths(_),     do: ["lib"]
@@ -44,14 +47,18 @@ defmodule AuthToken.Mixfile do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:jose, "~> 1.9"},
-      {:ojson, "~> 1.0"},
-      {:plug, "~> 1.8"},
-      {:phoenix, "~> 1.4"},
+      {:jose, "~> 1.11"},
+      # {:jose, "~> 1.9"},
+      # {:ojson, "~> 1.0"},
+      {:jason, "~> 1.0", only: [:dev, :test]},
+      {:ojson, github: "cogini/erlang-ojson", branch: "stacktrace", override: true},
+      # {:plug, "~> 1.8"},
+      {:plug, "~> 1.12"},
+      {:phoenix, "~> 1.4", only: [:dev, :test]},
 
-      {:poison, "~> 1.0", only: :test},
+      # {:poison, "~> 1.0", only: :test},
       # {:credo, "~> 1.1", only: [:dev, :test], runtime: false},
-      {:dialyxir, "~> 0.5", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.0", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.21", only: :dev},
       # {:excoveralls, "~> 0.12.0", only: [:dev, :test], runtime: false},
     ]
